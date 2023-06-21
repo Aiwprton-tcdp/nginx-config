@@ -1,0 +1,48 @@
+server {
+	listen 443 ssl;
+
+	set $root_path /var/www/{{frontend_folder}};
+	
+	ssl_certificate "/etc/letsencrypt/live/{{your_domain}}/fullchain.pem";
+	ssl_certificate_key "/etc/letsencrypt/live/{{your_domain}}/privkey.pem";
+	ssl_prefer_server_ciphers on;
+	ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+	ssl_ciphers EECDH:+AES256:-3DES:RSA+AES:!NULL:!RC4;
+
+	server_name {{your_domain}} www.{{your_domain}};
+	charset utf-8;
+	autoindex off;
+	rewrite_log on;
+	keepalive_timeout 60;
+	index index.html index.htm;
+	disable_symlinks if_not_owner from=$root_path;
+	
+	location / {
+		root "${root_path}/dist";
+		try_files $uri $uri/ /index.html;
+		include /etc/nginx/mime.types;
+	}
+
+	location /api {
+  	alias /var/www/{{webapi_backend_folder}}/public;
+		try_files $uri $uri/ @laravelapi;
+		location ~ \.php$ {
+			include snippets/fastcgi-php.conf;
+			fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+			fastcgi_param SCRIPT_FILENAME $request_filename;
+		}
+	}
+
+	location @laravelapi {
+		rewrite /api/(.*)?$ /api/index.php?$is_args$args last;
+	}
+
+	location ~ ^/.*\.php$ {
+		try_files      $fastcgi_script_name =404;
+		fastcgi_index  index.php;
+		fastcgi_pass   backend;
+	}
+
+	access_log /var/log/access.log;
+	error_log /var/log/error.log;
+}
